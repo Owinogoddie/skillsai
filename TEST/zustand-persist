@@ -1,0 +1,180 @@
+Zustand is a small, fast, and scalable bearbones state management solution for React. It can be used in various ways for your application. I'll provide an example of how to set up Zustand for a courses page, including saving state to localStorage.
+
+### 1. Setting Up Zustand
+
+First, install Zustand:
+
+```sh
+npm install zustand
+```
+
+### 2. Creating a Store
+
+Create a `useStore` hook using Zustand:
+
+```javascript
+import create from 'zustand';
+import { persist } from 'zustand/middleware';
+
+// Define the store
+const useStore = create(
+  persist(
+    (set) => ({
+      courses: [],
+      addCourse: (course) => set((state) => ({ courses: [...state.courses, course] })),
+      removeCourse: (id) => set((state) => ({ courses: state.courses.filter(course => course.id !== id) })),
+    }),
+    {
+      name: 'courses-storage', // name of the item in the storage
+      getStorage: () => localStorage, // (optional) by default, 'localStorage' is used
+    }
+  )
+);
+
+export default useStore;
+```
+
+### 3. Using the Store in Your Component
+
+Now, you can use this store in your components. Here’s an example of a `CoursesPage` component:
+
+```javascript
+import React, { useState } from 'react';
+import useStore from './useStore';
+
+const CoursesPage = () => {
+  const { courses, addCourse, removeCourse } = useStore();
+  const [newCourse, setNewCourse] = useState('');
+
+  const handleAddCourse = () => {
+    if (newCourse.trim()) {
+      addCourse({ id: Date.now(), name: newCourse });
+      setNewCourse('');
+    }
+  };
+
+  const handleRemoveCourse = (id) => {
+    removeCourse(id);
+  };
+
+  return (
+    <div>
+      <h1>Courses</h1>
+      <input
+        type="text"
+        value={newCourse}
+        onChange={(e) => setNewCourse(e.target.value)}
+        placeholder="Add a new course"
+      />
+      <button onClick={handleAddCourse}>Add Course</button>
+      <ul>
+        {courses.map((course) => (
+          <li key={course.id}>
+            {course.name} <button onClick={() => handleRemoveCourse(course.id)}>Remove</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default CoursesPage;
+```
+
+### 4. Persisting State to Local Storage
+
+The `persist` middleware used in the store configuration ensures that the state is saved to localStorage and rehydrated on application load.
+
+### 5. Example of the Whole Setup
+
+Ensure you have the following files:
+
+**`useStore.js`**:
+
+```javascript
+import create from 'zustand';
+import { persist } from 'zustand/middleware';
+
+// Define the store
+const useStore = create(
+  persist(
+    (set) => ({
+      courses: [],
+      addCourse: (course) => set((state) => ({ courses: [...state.courses, course] })),
+      removeCourse: (id) => set((state) => ({ courses: state.courses.filter(course => course.id !== id) })),
+    }),
+    {
+      name: 'courses-storage', // name of the item in the storage
+      getStorage: () => localStorage, // (optional) by default, 'localStorage' is used
+    }
+  )
+);
+
+export default useStore;
+```
+
+**`CoursesPage.js`**:
+
+```javascript
+import React, { useState } from 'react';
+import useStore from './useStore';
+
+const CoursesPage = () => {
+  const { courses, addCourse, removeCourse } = useStore();
+  const [newCourse, setNewCourse] = useState('');
+
+  const handleAddCourse = () => {
+    if (newCourse.trim()) {
+      addCourse({ id: Date.now(), name: newCourse });
+      setNewCourse('');
+    }
+  };
+
+  const handleRemoveCourse = (id) => {
+    removeCourse(id);
+  };
+
+  return (
+    <div>
+      <h1>Courses</h1>
+      <input
+        type="text"
+        value={newCourse}
+        onChange={(e) => setNewCourse(e.target.value)}
+        placeholder="Add a new course"
+      />
+      <button onClick={handleAddCourse}>Add Course</button>
+      <ul>
+        {courses.map((course) => (
+          <li key={course.id}>
+            {course.name} <button onClick={() => handleRemoveCourse(course.id)}>Remove</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default CoursesPage;
+```
+
+### 6. Putting It All Together
+
+In your main application file (e.g., `App.js`), you can import and use the `CoursesPage` component:
+
+```javascript
+import React from 'react';
+import CoursesPage from './CoursesPage';
+
+function App() {
+  return (
+    <div className="App">
+      <CoursesPage />
+    </div>
+  );
+}
+
+export default App;
+```
+
+With these steps, you should have a functional courses page that uses Zustand for state management and persists state in localStorage. Adjust the structure and style as needed to fit your application's design and requirements.

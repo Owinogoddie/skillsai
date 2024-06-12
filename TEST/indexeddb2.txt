@@ -1,0 +1,273 @@
+Got it. When using Next.js, you can still work with IndexedDB for local storage and sync data with your backend. Here’s a comprehensive step-by-step guide for using IndexedDB in a Next.js application:
+
+### Step-by-Step Guide to Using IndexedDB with Next.js
+
+### Step 1: Setting Up IndexedDB
+
+1. **Initialize IndexedDB**
+
+   Create a utility function to initialize IndexedDB and create object stores.
+
+   ```javascript
+   // utils/indexeddb.js
+   export function initDB() {
+     return new Promise((resolve, reject) => {
+       const request = indexedDB.open('LMSDatabase', 1);
+
+       request.onupgradeneeded = (event) => {
+         const db = event.target.result;
+         // Create object stores (tables)
+         db.createObjectStore('courses', { keyPath: 'id', autoIncrement: true });
+         db.createObjectStore('units', { keyPath: 'id', autoIncrement: true });
+         db.createObjectStore('chapters', { keyPath: 'id', autoIncrement: true });
+         db.createObjectStore('progress', { keyPath: 'id', autoIncrement: true });
+         db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+       };
+
+       request.onsuccess = (event) => {
+         resolve(event.target.result);
+       };
+
+       request.onerror = (event) => {
+         reject(event.target.error);
+       };
+     });
+   }
+   ```
+
+### Step 2: Adding Data to IndexedDB
+
+2. **Create Functions to Add Data**
+
+   Create a function to add data to a specific object store in IndexedDB.
+
+   ```javascript
+   // utils/indexeddb.js
+   export function addData(storeName, data) {
+     return new Promise((resolve, reject) => {
+       initDB().then((db) => {
+         const transaction = db.transaction([storeName], 'readwrite');
+         const store = transaction.objectStore(storeName);
+         const request = store.add(data);
+
+         request.onsuccess = () => {
+           resolve(request.result);
+         };
+
+         request.onerror = (event) => {
+           reject(event.target.error);
+         };
+       }).catch((error) => {
+         reject(error);
+       });
+     });
+   }
+
+   // Example usage
+   addData('users', {
+     email: 'john.doe@example.com',
+     name: 'John Doe',
+     password: 'securepassword'
+   }).then(id => console.log(`User added with ID: ${id}`))
+     .catch(error => console.error('Error adding user:', error));
+   ```
+
+### Step 3: Retrieving Data from IndexedDB
+
+3. **Create Functions to Retrieve Data**
+
+   Create a function to retrieve all data from a specific object store.
+
+   ```javascript
+   // utils/indexeddb.js
+   export function getData(storeName) {
+     return new Promise((resolve, reject) => {
+       initDB().then((db) => {
+         const transaction = db.transaction([storeName], 'readonly');
+         const store = transaction.objectStore(storeName);
+         const request = store.getAll();
+
+         request.onsuccess = () => {
+           resolve(request.result);
+         };
+
+         request.onerror = (event) => {
+           reject(event.target.error);
+         };
+       }).catch((error) => {
+         reject(error);
+       });
+     });
+   }
+
+   // Example usage
+   getData('users').then(users => console.log('Users:', users))
+     .catch(error => console.error('Error getting users:', error));
+   ```
+
+### Step 4: Syncing Data When Internet is Available
+
+4. **Create Function to Sync Data**
+
+   Create a function to sync data from IndexedDB to your main database when the internet is available.
+
+   ```javascript
+   // utils/indexeddb.js
+   import axios from 'axios';
+
+   export async function syncData(storeName, endpoint) {
+     try {
+       const data = await getData(storeName);
+       if (data.length > 0) {
+         await axios.post(endpoint, data);
+         console.log(`${storeName} data synced successfully`);
+       }
+     } catch (error) {
+       console.error(`Error syncing ${storeName} data:`, error);
+     }
+   }
+   ```
+
+5. **Create Server Endpoint to Handle Sync Data**
+
+   On your server, create an endpoint to handle incoming data and store it in your main database. Using Next.js API routes and Prisma:
+
+   ```javascript
+   // pages/api/sync-users.js
+   import { PrismaClient } from '@prisma/client';
+
+   const prisma = new PrismaClient();
+
+   export default async (req, res) => {
+     if (req.method === 'POST') {
+       const users = req.body;
+
+       try {
+         for (const user of users) {
+           await prisma.user.upsert({
+             where: { email: user.email },
+             update: { name: user.name, password: user.password },
+             create: { email: user.email, name: user.name, password: user.password },
+           });
+         }
+         res.status(200).json({ message: 'Users synced successfully' });
+       } catch (error) {
+         res.status(500).json({ error: error.message });
+       }
+     } else {
+       res.setHeader('Allow', ['POST']);
+       res.status(405).end(`Method ${req.method} Not Allowed`);
+     }
+   };
+
+   // pages/api/sync-progress.js
+   import { PrismaClient } from '@prisma/client';
+
+   const prisma = new PrismaClient();
+
+   export default async (req, res) => {
+     if (req.method === 'POST') {
+       const progressData = req.body;
+
+       try {
+         for (const progress of progressData) {
+           await prisma.progress.upsert({
+             where: {
+               userId_unitId_chapterId: {
+                 userId: progress.userId,
+                 unitId: progress.unitId,
+                 chapterId: progress.chapterId,
+               },
+             },
+             update: { completed: progress.completed },
+             create: {
+               userId: progress.userId,
+               unitId: progress.unitId,
+               chapterId: progress.chapterId,
+               completed: progress.completed,
+               createdAt: new Date(progress.createdAt),
+               updatedAt: new Date(progress.updatedAt),
+             },
+           });
+         }
+         res.status(200).json({ message: 'Progress data synced successfully' });
+       } catch (error) {
+         res.status(500).json({ error: error.message });
+       }
+     } else {
+       res.setHeader('Allow', ['POST']);
+       res.status(405).end(`Method ${req.method} Not Allowed`);
+     }
+   };
+   ```
+
+### Step 5: Detecting Network Connectivity
+
+6. **Detect Network Status Changes**
+
+   Use the `navigator.onLine` property and the `online` and `offline` events to detect changes in network connectivity and trigger the sync function when the network is available.
+
+   ```javascript
+   // components/NetworkStatus.js
+   import { useEffect } from 'react';
+   import { syncData } from '../utils/indexeddb';
+
+   const NetworkStatus = () => {
+     useEffect(() => {
+       const handleOnline = () => {
+         console.log('Network connection restored');
+         syncData('users', '/api/sync-users');
+         syncData('progress', '/api/sync-progress');
+       };
+
+       const handleOffline = () => {
+         console.log('Network connection lost');
+       };
+
+       window.addEventListener('online', handleOnline);
+       window.addEventListener('offline', handleOffline);
+
+       return () => {
+         window.removeEventListener('online', handleOnline);
+         window.removeEventListener('offline', handleOffline);
+       };
+     }, []);
+
+     return null;
+   };
+
+   export default NetworkStatus;
+   ```
+
+### Step 6: Integrate in Next.js Application
+
+7. **Integrate NetworkStatus Component**
+
+   Integrate the `NetworkStatus` component in your `_app.js` file to ensure it runs across your application.
+
+   ```javascript
+   // pages/_app.js
+   import NetworkStatus from '../components/NetworkStatus';
+   import '../styles/globals.css';
+
+   function MyApp({ Component, pageProps }) {
+     return (
+       <>
+         <NetworkStatus />
+         <Component {...pageProps} />
+       </>
+     );
+   }
+
+   export default MyApp;
+   ```
+
+### Summary
+
+1. **Set Up IndexedDB**: Initialize IndexedDB and create object stores in a utility file.
+2. **Store Data Locally**: Use functions to add, retrieve, and update data in IndexedDB.
+3. **Sync Data**: Implement logic to sync data from IndexedDB to your main database when network connectivity is restored.
+4. **Handle Network Changes**: Detect network status changes and trigger data sync when the network is available.
+5. **Integrate with Next.js**: Ensure the network status detection and sync logic are integrated into your Next.js application.
+
+This approach ensures that your Next.js application can function offline and seamlessly sync data when connectivity is restored. Adjust the logic as needed to fit your specific use case and data structure.

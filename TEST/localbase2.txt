@@ -1,0 +1,286 @@
+Using Localbase in a TypeScript Next.js application involves setting up the necessary types and functions to handle the Localbase operations while ensuring type safety. Here’s a step-by-step guide:
+
+### Step-by-Step Guide to Using Localbase with TypeScript in Next.js
+
+### Step 1: Install Localbase
+
+First, install Localbase via npm:
+
+```bash
+npm install localbase
+```
+
+### Step 2: Create TypeScript Types
+
+Define TypeScript types for your data models.
+
+```typescript
+// types/models.ts
+export interface User {
+  id?: string;
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface Course {
+  id?: string;
+  title: string;
+  description: string;
+  // Add other fields as needed
+}
+
+export interface Unit {
+  id?: string;
+  courseId: string;
+  title: string;
+  // Add other fields as needed
+}
+
+export interface Chapter {
+  id?: string;
+  unitId: string;
+  title: string;
+  // Add other fields as needed
+}
+
+export interface Progress {
+  id?: string;
+  userId: string;
+  unitId: string;
+  chapterId: string;
+  completed: boolean;
+}
+```
+
+### Step 3: Set Up Localbase
+
+Create a utility file to initialize and configure Localbase with TypeScript.
+
+```typescript
+// utils/localbase.ts
+import Localbase from 'localbase';
+
+const db = new Localbase('LMSDatabase');
+db.config.debug = false; // Disable debug logs
+
+// Initialize collections
+db.collection('courses');
+db.collection('units');
+db.collection('chapters');
+db.collection('progress');
+db.collection('users');
+
+export default db;
+```
+
+### Step 4: Adding Data to Localbase
+
+Create functions to add data to a specific collection in Localbase.
+
+```typescript
+// utils/localbase.ts
+import db from './localbase';
+import { User, Course, Unit, Chapter, Progress } from '../types/models';
+
+export function addData<T>(collectionName: string, data: T): Promise<void> {
+  return db.collection(collectionName).add(data);
+}
+
+// Example usage
+addData<User>('users', {
+  email: 'john.doe@example.com',
+  name: 'John Doe',
+  password: 'securepassword'
+}).then(() => console.log('User added successfully'))
+  .catch(error => console.error('Error adding user:', error));
+```
+
+### Step 5: Retrieving Data from Localbase
+
+Create functions to retrieve all data from a specific collection.
+
+```typescript
+// utils/localbase.ts
+export function getData<T>(collectionName: string): Promise<T[]> {
+  return db.collection(collectionName).get();
+}
+
+// Example usage
+getData<User>('users').then(users => console.log('Users:', users))
+  .catch(error => console.error('Error getting users:', error));
+```
+
+### Step 6: Syncing Data When Internet is Available
+
+Create a function to sync data from Localbase to your main database when the internet is available.
+
+```typescript
+// utils/localbase.ts
+import axios from 'axios';
+
+export async function syncData<T>(collectionName: string, endpoint: string): Promise<void> {
+  try {
+    const data = await getData<T>(collectionName);
+    if (data.length > 0) {
+      await axios.post(endpoint, data);
+      console.log(`${collectionName} data synced successfully`);
+    }
+  } catch (error) {
+    console.error(`Error syncing ${collectionName} data:`, error);
+  }
+}
+
+// Example usage in network status handler
+window.addEventListener('online', () => {
+  console.log('Network connection restored');
+  syncData<User>('users', '/api/sync-users');
+  syncData<Progress>('progress', '/api/sync-progress');
+});
+```
+
+### Step 7: Create Server Endpoints for Syncing Data
+
+Create API routes in Next.js to handle incoming data and store it in your main database using Prisma.
+
+```typescript
+// pages/api/sync-users.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+import { PrismaClient } from '@prisma/client';
+import { User } from '../../types/models';
+
+const prisma = new PrismaClient();
+
+export default async (req: NextApiRequest, res: NextApiResponse) => {
+  if (req.method === 'POST') {
+    const users: User[] = req.body;
+
+    try {
+      for (const user of users) {
+        await prisma.user.upsert({
+          where: { email: user.email },
+          update: { name: user.name, password: user.password },
+          create: { email: user.email, name: user.name, password: user.password },
+        });
+      }
+      res.status(200).json({ message: 'Users synced successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+};
+
+// pages/api/sync-progress.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+import { PrismaClient } from '@prisma/client';
+import { Progress } from '../../types/models';
+
+const prisma = new PrismaClient();
+
+export default async (req: NextApiRequest, res: NextApiResponse) => {
+  if (req.method === 'POST') {
+    const progressData: Progress[] = req.body;
+
+    try {
+      for (const progress of progressData) {
+        await prisma.progress.upsert({
+          where: {
+            userId_unitId_chapterId: {
+              userId: progress.userId,
+              unitId: progress.unitId,
+              chapterId: progress.chapterId,
+            },
+          },
+          update: { completed: progress.completed },
+          create: {
+            userId: progress.userId,
+            unitId: progress.unitId,
+            chapterId: progress.chapterId,
+            completed: progress.completed,
+            createdAt: new Date(progress.createdAt),
+            updatedAt: new Date(progress.updatedAt),
+          },
+        });
+      }
+      res.status(200).json({ message: 'Progress data synced successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+};
+```
+
+### Step 8: Detecting Network Connectivity
+
+Use the `navigator.onLine` property and the `online` and `offline` events to detect changes in network connectivity and trigger the sync function when the network is available.
+
+```typescript
+// components/NetworkStatus.tsx
+import { useEffect } from 'react';
+import { syncData } from '../utils/localbase';
+import { User, Progress } from '../types/models';
+
+const NetworkStatus: React.FC = () => {
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('Network connection restored');
+      syncData<User>('users', '/api/sync-users');
+      syncData<Progress>('progress', '/api/sync-progress');
+    };
+
+    const handleOffline = () => {
+      console.log('Network connection lost');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return null;
+};
+
+export default NetworkStatus;
+```
+
+### Step 9: Integrate in Next.js Application
+
+Integrate the `NetworkStatus` component in your `_app.tsx` file to ensure it runs across your application.
+
+```typescript
+// pages/_app.tsx
+import NetworkStatus from '../components/NetworkStatus';
+import '../styles/globals.css';
+import { AppProps } from 'next/app';
+
+function MyApp({ Component, pageProps }: AppProps) {
+  return (
+    <>
+      <NetworkStatus />
+      <Component {...pageProps} />
+    </>
+  );
+}
+
+export default MyApp;
+```
+
+### Summary
+
+1. **Install and Set Up Localbase**: Initialize Localbase and create collections in a utility file.
+2. **Store Data Locally**: Use functions to add, retrieve, and update data in Localbase.
+3. **Sync Data**: Implement logic to sync data from Localbase to your main database when network connectivity is restored.
+4. **Handle Network Changes**: Detect network status changes and trigger data sync when the network is available.
+5. **Integrate with Next.js**: Ensure the network status detection and sync logic are integrated into your Next.js application using TypeScript.
+
+This approach allows you to use Localbase for local storage and seamlessly sync data to your main database when connectivity is restored, all while leveraging the type safety provided by TypeScript. Adjust the logic as needed to fit your specific use case and data structure.

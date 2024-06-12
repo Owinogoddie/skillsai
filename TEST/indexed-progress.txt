@@ -1,0 +1,192 @@
+If you're in an area with no network connectivity and need to use IndexedDB as a temporary database, you can do so to store data locally on the client side. Later, when network connectivity is restored, you can migrate this data to your main database.
+
+### Steps to Use IndexedDB for Local Storage and Migration
+
+1. **Set Up IndexedDB**: Use IndexedDB to store your data locally while offline.
+2. **Create a Function to Sync Data**: Implement a function to migrate data from IndexedDB to your main database once the network is restored.
+
+Here's how you can achieve this:
+
+### 1. Setting Up IndexedDB
+
+IndexedDB is a low-level API for client-side storage of significant amounts of structured data. 
+
+#### Initializing IndexedDB
+
+```javascript
+// Initialize IndexedDB
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('LMSDatabase', 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      // Create object stores (tables)
+      db.createObjectStore('courses', { keyPath: 'id', autoIncrement: true });
+      db.createObjectStore('units', { keyPath: 'id', autoIncrement: true });
+      db.createObjectStore('chapters', { keyPath: 'id', autoIncrement: true });
+      db.createObjectStore('progress', { keyPath: 'id', autoIncrement: true });
+      db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+      resolve(db);
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+// Example function to add data to IndexedDB
+function addData(storeName, data) {
+  initDB().then((db) => {
+    const transaction = db.transaction([storeName], 'readwrite');
+    const store = transaction.objectStore(storeName);
+    store.add(data);
+  }).catch((error) => {
+    console.error('Error initializing IndexedDB:', error);
+  });
+}
+```
+
+### 2. Using IndexedDB to Store Data
+
+You can create functions to add, retrieve, and update data in IndexedDB. Here's an example of how to add progress data:
+
+```javascript
+function addProgress(progress) {
+  addData('progress', progress);
+}
+
+// Example usage
+addProgress({
+  userId: 1,
+  unitId: 2,
+  chapterId: 3,
+  completed: true,
+  createdAt: new Date(),
+  updatedAt: new Date()
+});
+```
+
+### 3. Syncing Data When Network is Restored
+
+When the network is available, you can fetch the data from IndexedDB and send it to your main database. This requires setting up API endpoints and calling them when connectivity is detected.
+
+#### Fetching Data from IndexedDB
+
+```javascript
+function getData(storeName) {
+  return new Promise((resolve, reject) => {
+    initDB().then((db) => {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
+  });
+}
+```
+
+#### Syncing Data to Main Database
+
+You can use a library like Axios to send data to your server:
+
+```javascript
+import axios from 'axios';
+
+async function syncProgress() {
+  try {
+    const progressData = await getData('progress');
+    if (progressData.length > 0) {
+      await axios.post('/api/sync-progress', progressData);
+      console.log('Progress data synced successfully');
+    }
+  } catch (error) {
+    console.error('Error syncing progress data:', error);
+  }
+}
+```
+
+#### Example API Endpoint for Syncing Data
+
+On your server, create an endpoint to handle the incoming data and store it in your main database:
+
+```javascript
+const express = require('express');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
+const app = express();
+
+app.use(express.json());
+
+app.post('/api/sync-progress', async (req, res) => {
+  const progressData = req.body;
+
+  try {
+    for (const progress of progressData) {
+      await prisma.progress.upsert({
+        where: {
+          userId_unitId_chapterId: {
+            userId: progress.userId,
+            unitId: progress.unitId,
+            chapterId: progress.chapterId,
+          },
+        },
+        update: { completed: progress.completed },
+        create: {
+          userId: progress.userId,
+          unitId: progress.unitId,
+          chapterId: progress.chapterId,
+          completed: progress.completed,
+          createdAt: new Date(progress.createdAt),
+          updatedAt: new Date(progress.updatedAt),
+        },
+      });
+    }
+    res.status(200).json({ message: 'Progress data synced successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+```
+
+### 4. Detecting Network Connectivity
+
+Use the `navigator.onLine` property and the `online` and `offline` events to detect network status changes:
+
+```javascript
+window.addEventListener('online', () => {
+  console.log('Network connection restored');
+  syncProgress(); // Sync data when network is restored
+});
+
+window.addEventListener('offline', () => {
+  console.log('Network connection lost');
+});
+```
+
+### Summary
+
+1. **Set Up IndexedDB**: Initialize IndexedDB and create object stores.
+2. **Store Data Locally**: Use functions to add, retrieve, and update data in IndexedDB.
+3. **Sync Data**: Implement logic to sync data from IndexedDB to your main database when network connectivity is restored.
+4. **Handle Network Changes**: Detect network status changes and trigger data sync when the network is available.
+
+This approach ensures that your application can function offline and seamlessly sync data when connectivity is restored. Adjust the logic as needed to fit your specific use case and data structure.

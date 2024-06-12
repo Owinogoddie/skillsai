@@ -1,0 +1,70 @@
+Here's how you can pass data from a child component to a parent component containing the useAuthStore in your React application:
+
+1. Callback Function in the Parent Component:
+
+Inside the parent component where you're using useAuthStore, define a callback function that will receive the authentication data from the child component.
+Update the state of your useAuthStore using the setUser function from the store within this callback.
+TypeScript
+// ParentComponent.tsx
+import { useAuthStore } from './store/authStore';
+
+const ParentComponent = () => {
+  const { setUser } = useAuthStore();
+
+  const handleAuthData = (authData: any) => {
+    // Update user state in the store using authData
+    setUser(authData);
+  };
+
+  // ... rest of your component logic
+
+  return (
+    <div>
+      <ChildComponent onAuthData={handleAuthData} /> {/* Pass the callback function as a prop */}
+      {/* ... other content */}
+    </div>
+  );
+};
+Use code with caution.
+content_copy
+2. Passing the Callback Prop to the Child:
+
+In the child component where you handle the authentication logic (e.g., login form), create a prop to hold the callback function.
+Pass the handleAuthData function defined in the parent component as the value of this prop when rendering the child component.
+Call the callback function within the child component after successful authentication, passing the authentication data as an argument.
+TypeScript
+// ChildComponent.tsx
+
+const ChildComponent = ({ onAuthData }: { onAuthData: (data: any) => void }) => {
+  // ... login form or authentication logic
+
+  const handleLogin = async () => {
+    // ... perform authentication logic (e.g., API call)
+    const authData = { /* ... user data from authentication */ };
+
+    if (authData) {
+      onAuthData(authData); // Call the callback function from parent with auth data
+    }
+  };
+
+  return (
+    <div>
+      {/* Login form or other UI elements */}
+      <button onClick={handleLogin}>Login</button>
+    </div>
+  );
+};
+
+export default ChildComponent;
+Use code with caution.
+content_copy
+Explanation:
+
+By defining a callback function in the parent and passing it as a prop to the child, you create a communication channel between the components.
+The child component calls the parent's callback with the authentication data, triggering the state update in the useAuthStore.
+Additional Notes:
+
+This approach is suitable for passing small amounts of data upwards in the component hierarchy.
+For more complex scenarios, consider using Context API or a state management library like Redux for managing global state across multiple components.
+Ensure proper type safety by defining the expected data structure for the authData argument in both the callback function and the function that calls it.
+By following these steps, you can effectively pass authentication data from a child component to a parent component using Zustand and React components.

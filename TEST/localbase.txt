@@ -1,0 +1,10 @@
+Localbase is a JavaScript library that provides a simplified and user-friendly interface for working with IndexedDB. It offers a more intuitive way to perform CRUD operations and manage local storage. Here’s a step-by-step guide on how to use Localbase as an IndexedDB alternative in your Next.js application.
+
+Step-by-Step Guide to Using Localbase with Next.js
+
+Step 1: Install Localbase
+First, install Localbase via npm:
+Create a folder in your src and call it @types.
+Create inside this folder a file named alltypes.d.ts
+In this newly created file, just add this line declare module 'localbase';
+In your tsconfig.json file, insert "typeRoots": ["node_modules/@types", "src/@types"] in your 'compilerOptions'

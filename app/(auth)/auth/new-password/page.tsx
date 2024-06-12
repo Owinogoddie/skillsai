@@ -1,0 +1,10 @@
+import { NewPasswordForm } from '@/components/auth/new-password-form'
+import React from 'react'
+
+const VerificationPage = () => {
+  return (
+    <div><NewPasswordForm/></div>
+  )
+}
+
+export default VerificationPage
