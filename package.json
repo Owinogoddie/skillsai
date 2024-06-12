@@ -44,7 +44,7 @@
     "localbase": "^0.7.5",
     "lucide-react": "^0.379.0",
     "next": "14.2.3",
-    "next-auth": "^5.0.0-beta.19",
+    "next-auth": "^5.0.0-beta.17",
     "next-video": "^1.1.0",
     "prisma": "^5.14.0",
     "query-string": "^9.0.0",
